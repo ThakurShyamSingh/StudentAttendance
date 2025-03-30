@@ -14,15 +14,18 @@ enum class Routes(val route: String) {
     FACE_RECOGNITION("face_recognition") // New Route for Face Recognition
 }
 
+
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val context = androidx.compose.ui.platform.LocalContext.current // Get the context
 
     NavHost(navController = navController, startDestination = Routes.CAMPUS.route) {
         composable(Routes.CAMPUS.route) { CampusScreen(navController) }
-        composable(Routes.DASHBOARD.route) { DashboardScreen(navController) }
+        composable(Routes.DASHBOARD.route) { DashboardScreen(navController, context) } // Pass context here
         composable(Routes.FACE_CAPTURE.route) { FaceCaptureScreen(navController) }
         composable(Routes.REGISTERED_STUDENTS.route) { RegisteredStudentsScreen(navController) }
-        composable(Routes.FACE_RECOGNITION.route) { FaceRecognitionScreen(navController) } // Added Face Recognition Screen
+        composable(Routes.FACE_RECOGNITION.route) { FaceRecognitionScreen(navController) }
     }
 }
+

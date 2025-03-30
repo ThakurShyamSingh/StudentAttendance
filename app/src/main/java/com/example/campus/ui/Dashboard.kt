@@ -1,9 +1,10 @@
 package com.example.campus.ui
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -13,7 +14,10 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 
 @Composable
-fun DashboardScreen(navController: NavController) {
+fun DashboardScreen(navController: NavController, context: Context) {
+    var isUploading by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableFloatStateOf(0f) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -25,7 +29,6 @@ fun DashboardScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Button to Capture Face
         Button(
             onClick = { navController.navigate("face_capture") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -35,7 +38,6 @@ fun DashboardScreen(navController: NavController) {
             Text("Capture Face", color = Color.White, fontSize = 18.sp)
         }
 
-        // Button to View Registered Students
         Button(
             onClick = { navController.navigate("registered_students") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -45,7 +47,6 @@ fun DashboardScreen(navController: NavController) {
             Text("View Registered Students", color = Color.White, fontSize = 18.sp)
         }
 
-        // Button to Verify Face
         Button(
             onClick = { navController.navigate("face_recognition") },
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -55,5 +56,26 @@ fun DashboardScreen(navController: NavController) {
             Text("Verify", color = Color.White, fontSize = 18.sp)
         }
 
+        Button(
+            onClick = {
+                FirestoreUploader.uploadJSONToFirestore(
+                    context,
+                    onProgress = { progress -> uploadProgress = progress },
+                    onUploading = { isUploading = it }
+                )
+            },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
+            enabled = !isUploading
+        ) {
+            Text("Upload Face Data", color = Color.White, fontSize = 18.sp)
+        }
+
+        if (isUploading) {
+            Spacer(modifier = Modifier.height(10.dp))
+            LinearProgressIndicator(progress = { uploadProgress }, modifier = Modifier.fillMaxWidth())
+            Text("Uploading... ${ (uploadProgress * 100).toInt() }%", fontSize = 16.sp)
+        }
     }
 }

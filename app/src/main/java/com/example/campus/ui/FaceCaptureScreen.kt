@@ -24,7 +24,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileWriter
-import java.io.BufferedWriter
+//import java.io.BufferedWriter
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.FileReader
 
 @Composable
 fun FaceCaptureScreen(navController: NavController) {
@@ -119,7 +122,7 @@ fun FaceCaptureScreen(navController: NavController) {
                             return@captureAndProcessFace
                         }
 
-                        saveEmbeddingToCSV(context, studentName, studentRollNumber, embedding)
+                        saveEmbeddingToJSON(context, studentName, studentRollNumber, embedding)
                         registrationMessage = "Face Successfully Registered"
                     }
                 }
@@ -146,21 +149,38 @@ fun FaceCaptureScreen(navController: NavController) {
     }
 }
 
-fun saveEmbeddingToCSV(context: android.content.Context, name: String, rollNumber: String, embedding: FloatArray) {
-    val file = File(context.filesDir, "registered_faces.csv")
-    val writer = BufferedWriter(FileWriter(file, true))
 
-    writer.append(name)
-    writer.append(",")
-    writer.append(rollNumber)
-    writer.append(",")
 
-    embedding.forEachIndexed { index, value ->
-        writer.append(value.toString())
-        if (index != embedding.size - 1) writer.append(",")
+
+fun saveEmbeddingToJSON(context: android.content.Context, name: String, rollNumber: String, embedding: FloatArray) {
+    val file = File(context.filesDir, "registered_faces.json")
+
+    val jsonObject: JSONObject = if (file.exists()) {
+        val reader = FileReader(file)
+        val existingData = reader.readText()
+        reader.close()
+        if (existingData.isNotEmpty()) JSONObject(existingData) else JSONObject()
+    } else {
+        JSONObject()
     }
 
-    writer.append("\n")
+    val studentArray = if (jsonObject.has("StudentDetails")) {
+        jsonObject.getJSONArray("StudentDetails")
+    } else {
+        JSONArray()
+    }
+
+    val studentObject = JSONObject().apply {
+        put("name", name)
+        put("rollNumber", rollNumber)
+        put("embedding", JSONArray(embedding.toList()))
+    }
+
+    studentArray.put(studentObject)
+    jsonObject.put("StudentDetails", studentArray)
+
+    val writer = FileWriter(file, false)
+    writer.write(jsonObject.toString(4)) // Pretty-print JSON with indentation
     writer.flush()
     writer.close()
 }

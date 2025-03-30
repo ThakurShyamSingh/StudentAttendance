@@ -3,6 +3,7 @@ package com.example.campus.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
@@ -16,7 +17,7 @@ class FaceNetHelper(private val context: Context) : AutoCloseable {
 
     private val modelPath = "facenet.tflite"
     private var interpreter: Interpreter? = null
-    private val csvFile = File(context.filesDir, "registered_faces.csv")
+    private val jsonFile = File(context.filesDir, "registered_faces.json")
     private val faceMatchThreshold = 0.6f
 
     init {
@@ -76,25 +77,33 @@ class FaceNetHelper(private val context: Context) : AutoCloseable {
     private fun loadRegisteredFaces(): List<FaceData> {
         val faceList = mutableListOf<FaceData>()
 
-        if (!csvFile.exists()) return faceList
+        if (!jsonFile.exists()) return faceList
 
-        csvFile.forEachLine { line ->
-            val parts = line.split(",")
-            if (parts.size > 2) {
-                val name = parts[0]
-                val rollNumber = parts[1]
-                val embedding = parts.drop(2).mapNotNull { it.toFloatOrNull() }.toFloatArray()
+        return try {
+            val jsonString = jsonFile.readText()
+            val jsonObject = JSONObject(jsonString)
+            val studentArray = jsonObject.getJSONArray("StudentDetails")
+
+            for (i in 0 until studentArray.length()) {
+                val student = studentArray.getJSONObject(i)
+                val name = student.getString("name")
+                val rollNumber = student.getString("rollNumber")
+                val embeddingArray = student.getJSONArray("embedding")
+                val embedding = FloatArray(embeddingArray.length()) { j -> embeddingArray.getDouble(j).toFloat() }
 
                 if (embedding.size == 512) {
                     faceList.add(FaceData(name, rollNumber, embedding))
                 } else {
-                    Log.e("FaceNetHelper", "Invalid embedding format, skipping: $line")
+                    Log.e("FaceNetHelper", "Invalid embedding format, skipping: $student")
                 }
             }
-        }
 
-        Log.d("FaceNetHelper", "Loaded ${faceList.size} registered faces")
-        return faceList
+            Log.d("FaceNetHelper", "Loaded ${faceList.size} registered faces from JSON")
+            faceList
+        } catch (e: Exception) {
+            Log.e("FaceNetHelper", "Error reading JSON file", e)
+            faceList
+        }
     }
 
     private fun calculateEuclideanDistance(embedding1: FloatArray, embedding2: FloatArray): Float {
