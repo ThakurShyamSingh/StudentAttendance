@@ -2,7 +2,7 @@ package com.example.campus.ui
 
 import android.Manifest
 import android.graphics.Bitmap
-import androidx.navigation.NavController
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -18,26 +18,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
+import androidx.navigation.NavController
 import com.example.campus.util.CameraHelper
 import com.example.campus.util.FaceNetHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileWriter
-import java.io.BufferedWriter
 
 @Composable
-fun FaceCaptureScreen(navController: NavController) {
+fun FaceRecognitionScreen(navController: NavController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalContext.current as LifecycleOwner
     val previewView = remember { PreviewView(context) }
-
     val cameraHelper = remember { CameraHelper(context, lifecycleOwner, previewView) }
     val faceNetHelper = remember { FaceNetHelper(context) }
 
-    var registrationMessage by remember { mutableStateOf("") }
-    var studentName by remember { mutableStateOf("") }
-    var studentRollNumber by remember { mutableStateOf("") }
+    var recognitionMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -46,7 +41,7 @@ fun FaceCaptureScreen(navController: NavController) {
             if (granted) {
                 cameraHelper.setupCamera()
             } else {
-                registrationMessage = "Camera permission denied"
+                recognitionMessage = "Camera permission denied"
             }
         }
     )
@@ -77,50 +72,33 @@ fun FaceCaptureScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = studentName,
-            onValueChange = { studentName = it },
-            label = { Text("Enter Student Name") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = studentRollNumber,
-            onValueChange = { studentRollNumber = it },
-            label = { Text("Enter Student Roll Number") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         Button(
             onClick = {
-                if (studentName.isBlank() || studentRollNumber.isBlank()) {
-                    registrationMessage = "Please enter both name and roll number"
-                    return@Button
-                }
-
                 coroutineScope.launch(Dispatchers.IO) {
                     cameraHelper.captureAndProcessFace { bitmap: Bitmap? ->
                         if (bitmap == null) {
-                            registrationMessage = "Failed to capture face"
+                            recognitionMessage = "Failed to capture face"
                             return@captureAndProcessFace
                         }
 
                         val embedding = faceNetHelper.generateEmbedding(bitmap)
                         if (embedding == null) {
-                            registrationMessage = "Failed to generate embedding"
+                            recognitionMessage = "Failed to generate embedding"
                             return@captureAndProcessFace
                         }
 
-                        saveEmbeddingToCSV(context, studentName, studentRollNumber, embedding)
-                        registrationMessage = "Face Successfully Registered"
+                        val recognizedData = faceNetHelper.recognizeFace(embedding)
+
+                        recognitionMessage = if (recognizedData != null) {
+                            val (name, rollNumber) = recognizedData
+                            val verifiedMessage = "Name: $name, Roll No: $rollNumber Verified"
+                            coroutineScope.launch(Dispatchers.Main) {
+                                Toast.makeText(context, verifiedMessage, Toast.LENGTH_LONG).show()
+                            }
+                            verifiedMessage
+                        } else {
+                            "Face Not Recognized"
+                        }
                     }
                 }
             },
@@ -130,13 +108,13 @@ fun FaceCaptureScreen(navController: NavController) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Text("Capture Face", color = Color.White, fontSize = 18.sp)
+            Text("Scan Face", color = Color.White, fontSize = 18.sp)
         }
 
-        if (registrationMessage.isNotEmpty()) {
+        if (recognitionMessage.isNotEmpty()) {
             Text(
-                text = registrationMessage,
-                color = if (registrationMessage.contains("success", true)) Color.Green else Color.Red,
+                text = recognitionMessage,
+                color = if (recognitionMessage.contains("Verified", true)) Color.Green else Color.Red,
                 fontSize = 18.sp,
                 modifier = Modifier
                     .padding(top = 16.dp)
@@ -144,23 +122,4 @@ fun FaceCaptureScreen(navController: NavController) {
             )
         }
     }
-}
-
-fun saveEmbeddingToCSV(context: android.content.Context, name: String, rollNumber: String, embedding: FloatArray) {
-    val file = File(context.filesDir, "registered_faces.csv")
-    val writer = BufferedWriter(FileWriter(file, true))
-
-    writer.append(name)
-    writer.append(",")
-    writer.append(rollNumber)
-    writer.append(",")
-
-    embedding.forEachIndexed { index, value ->
-        writer.append(value.toString())
-        if (index != embedding.size - 1) writer.append(",")
-    }
-
-    writer.append("\n")
-    writer.flush()
-    writer.close()
 }

@@ -1,9 +1,9 @@
 package com.example.campus.ui
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -94,7 +94,7 @@ private fun loadRegisteredStudentsFromCSV(context: Context): List<Student> {
 
 private fun loadBitmapFromUri(context: Context, uriString: String): Bitmap? {
     return try {
-        val uri = Uri.parse(uriString)
+        val uri = uriString.toUri()
         context.contentResolver.openInputStream(uri)?.use { inputStream ->
             BitmapFactory.decodeStream(inputStream)
         }

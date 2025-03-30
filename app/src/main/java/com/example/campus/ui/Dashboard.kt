@@ -44,5 +44,16 @@ fun DashboardScreen(navController: NavController) {
         ) {
             Text("View Registered Students", color = Color.White, fontSize = 18.sp)
         }
+
+        // Button to Verify Face
+        Button(
+            onClick = { navController.navigate("face_recognition") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+        ) {
+            Text("Verify", color = Color.White, fontSize = 18.sp)
+        }
+
     }
 }
