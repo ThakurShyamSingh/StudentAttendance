@@ -10,7 +10,8 @@ enum class Routes(val route: String) {
     CAMPUS("campus"),
     DASHBOARD("dashboard"),
     FACE_CAPTURE("face_capture"),
-    REGISTERED_STUDENTS("registered_students") // New Route
+    REGISTERED_STUDENTS("registered_students"),
+    FACE_RECOGNITION("face_recognition") // New Route for Face Recognition
 }
 
 @Composable
@@ -21,6 +22,7 @@ fun AppNavigation() {
         composable(Routes.CAMPUS.route) { CampusScreen(navController) }
         composable(Routes.DASHBOARD.route) { DashboardScreen(navController) }
         composable(Routes.FACE_CAPTURE.route) { FaceCaptureScreen(navController) }
-        composable(Routes.REGISTERED_STUDENTS.route) { RegisteredStudentsScreen(navController) } // New Screen
+        composable(Routes.REGISTERED_STUDENTS.route) { RegisteredStudentsScreen(navController) }
+        composable(Routes.FACE_RECOGNITION.route) { FaceRecognitionScreen(navController) } // Added Face Recognition Screen
     }
 }

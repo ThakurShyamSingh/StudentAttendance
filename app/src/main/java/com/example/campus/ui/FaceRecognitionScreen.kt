@@ -2,7 +2,7 @@ package com.example.campus.ui
 
 import android.Manifest
 import android.graphics.Bitmap
-import androidx.navigation.NavController
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -18,24 +18,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
+import androidx.navigation.NavController
 import com.example.campus.util.CameraHelper
 import com.example.campus.util.FaceNetHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileWriter
 
 @Composable
-fun FaceCaptureScreen(navController: NavController) {
+fun FaceRecognitionScreen(navController: NavController) {
     val context = LocalContext.current
     val lifecycleOwner = LocalContext.current as LifecycleOwner
     val previewView = remember { PreviewView(context) }
-
     val cameraHelper = remember { CameraHelper(context, lifecycleOwner, previewView) }
     val faceNetHelper = remember { FaceNetHelper(context) }
 
-    var registrationMessage by remember { mutableStateOf("") }
-    var studentName by remember { mutableStateOf("") }
+    var recognitionMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -44,7 +41,7 @@ fun FaceCaptureScreen(navController: NavController) {
             if (granted) {
                 cameraHelper.setupCamera()
             } else {
-                registrationMessage = "Camera permission denied"
+                recognitionMessage = "Camera permission denied"
             }
         }
     )
@@ -75,42 +72,30 @@ fun FaceCaptureScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedTextField(
-            value = studentName,
-            onValueChange = { studentName = it },
-            label = { Text("Enter Student Name") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         Button(
             onClick = {
-                if (studentName.isBlank()) {
-                    registrationMessage = "Please enter a student name"
-                    return@Button
-                }
-
                 coroutineScope.launch(Dispatchers.IO) {
                     cameraHelper.captureAndProcessFace { bitmap: Bitmap? ->
                         if (bitmap == null) {
-                            registrationMessage = "Failed to capture face"
+                            recognitionMessage = "Failed to capture face"
                             return@captureAndProcessFace
                         }
 
                         // Generate face embedding
                         val embedding = faceNetHelper.generateEmbedding(bitmap)
                         if (embedding == null) {
-                            registrationMessage = "Failed to generate embedding"
+                            recognitionMessage = "Failed to generate embedding"
                             return@captureAndProcessFace
                         }
 
-                        // Save embedding to CSV
-                        saveEmbeddingToCSV(context, studentName, embedding)
+                        // Compare with registered embeddings
+                        val recognizedName = faceNetHelper.recognizeFace(embedding)
 
-                        registrationMessage = "Face Successfully Registered"
+                        recognitionMessage = if (recognizedName != null) {
+                            "Verified: $recognizedName"
+                        } else {
+                            "Face Not Recognized"
+                        }
                     }
                 }
             },
@@ -120,13 +105,13 @@ fun FaceCaptureScreen(navController: NavController) {
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Text("Capture Face", color = Color.White, fontSize = 18.sp)
+            Text("Scan Face", color = Color.White, fontSize = 18.sp)
         }
 
-        if (registrationMessage.isNotEmpty()) {
+        if (recognitionMessage.isNotEmpty()) {
             Text(
-                text = registrationMessage,
-                color = if (registrationMessage.contains("success", true)) Color.Green else Color.Red,
+                text = recognitionMessage,
+                color = if (recognitionMessage.contains("Verified", true)) Color.Green else Color.Red,
                 fontSize = 18.sp,
                 modifier = Modifier
                     .padding(top = 16.dp)
@@ -134,24 +119,4 @@ fun FaceCaptureScreen(navController: NavController) {
             )
         }
     }
-}
-
-/**
- * Saves face embeddings to a CSV file in FaceCaptureScreen.
- */
-fun saveEmbeddingToCSV(context: android.content.Context, name: String, embedding: FloatArray) {
-    val file = File(context.filesDir, "registered_faces.csv")
-    val writer = FileWriter(file, true)
-
-    writer.append(name)
-    writer.append(",")
-
-    embedding.forEachIndexed { index, value ->
-        writer.append(value.toString())
-        if (index != embedding.size - 1) writer.append(",")
-    }
-
-    writer.append("\n")
-    writer.flush()
-    writer.close()
 }
