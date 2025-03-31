@@ -92,18 +92,12 @@ dependencies {
     // implementation("org.tensorflow:tensorflow-lite-task-vision:2.13.0") // Uncomment if needed for vision tasks
     implementation("com.google.mlkit:face-detection:16.1.5")
 
-    implementation ("com.google.firebase:firebase-storage-ktx:20.3.0")
-
-    implementation(platform("com.google.firebase:firebase-bom:33.11.0"))
-
-    implementation("com.google.firebase:firebase-analytics")
-
     implementation ("com.google.firebase:firebase-appcheck:17.0.1")
     implementation ("com.google.firebase:firebase-appcheck-playintegrity:17.0.1")
 
-    implementation ("com.google.firebase:firebase-database-ktx:20.2.2")
-
+    implementation("androidx.work:work-runtime-ktx:2.8.1")
     implementation("com.google.firebase:firebase-firestore-ktx:24.9.1")
+
 
 
 
