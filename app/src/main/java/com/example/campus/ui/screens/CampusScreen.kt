@@ -1,4 +1,4 @@
-package com.example.campus.ui
+package com.example.campus.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

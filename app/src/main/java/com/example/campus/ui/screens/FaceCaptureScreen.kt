@@ -1,6 +1,7 @@
-package com.example.campus.ui
+package com.example.campus.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.navigation.NavController
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -152,7 +153,7 @@ fun FaceCaptureScreen(navController: NavController) {
 
 
 
-fun saveEmbeddingToJSON(context: android.content.Context, name: String, rollNumber: String, embedding: FloatArray) {
+fun saveEmbeddingToJSON(context: Context, name: String, rollNumber: String, embedding: FloatArray) {
     val file = File(context.filesDir, "registered_faces.json")
 
     val jsonObject: JSONObject = if (file.exists()) {

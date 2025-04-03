@@ -1,4 +1,4 @@
-package com.example.campus.ui
+package com.example.campus.ui.screens
 
 import android.content.Context
 import android.util.Log

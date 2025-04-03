@@ -18,7 +18,7 @@ class FirestoreDownloadWorker(
             try {
                 FirestoreDownloader.downloadJSONFromFirestore(context,
                     onDownloading = {},
-                    onComplete = { success ->
+                    onDownloadComplete = { success ->
                         if (success) {
                             Log.d("FirestoreDownloadWorker", "Student data updated successfully!")
                         } else {

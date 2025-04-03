@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.campus"
-        minSdk = 28
+        minSdk = 31
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -94,9 +94,14 @@ dependencies {
 
     implementation ("com.google.firebase:firebase-appcheck:17.0.1")
     implementation ("com.google.firebase:firebase-appcheck-playintegrity:17.0.1")
+    implementation (platform("com.google.firebase:firebase-bom:32.7.0"))
 
     implementation("androidx.work:work-runtime-ktx:2.8.1")
     implementation("com.google.firebase:firebase-firestore-ktx:24.9.1")
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.1")
+    implementation ("com.google.firebase:firebase-auth-ktx")
+    implementation ("com.google.android.gms:play-services-auth:20.7.0")
+
 
 
 

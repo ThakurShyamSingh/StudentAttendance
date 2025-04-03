@@ -1,6 +1,6 @@
 package com.example.campus.ui
 
-import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -8,19 +8,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.example.campus.util.CrowdsensingHelper
-
 
 @Composable
-fun DashboardScreen(navController: NavController, context: Context) {
+fun DashboardScreen(navController: NavController) {
     var isUploading by remember { mutableStateOf(false) }
-    var uploadProgress by remember { mutableFloatStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadComplete by remember { mutableStateOf(false) }
+    var uploadComplete by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // Handle upload completion toast only once
+    LaunchedEffect(uploadComplete) {
+        if (uploadComplete) {
+            Toast.makeText(context, "Upload Complete!", Toast.LENGTH_SHORT).show()
+            uploadComplete = false // Reset state to prevent re-triggering on recomposition
+        }
+    }
+
+    // Handle download completion toast only once
+    LaunchedEffect(downloadComplete) {
+        if (downloadComplete) {
+            Toast.makeText(context, "Download Complete!", Toast.LENGTH_SHORT).show()
+            downloadComplete = false // Reset state to prevent re-triggering on recomposition
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -33,83 +49,73 @@ fun DashboardScreen(navController: NavController, context: Context) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        Button(
-            onClick = { navController.navigate("face_capture") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
-        ) {
-            Text("Capture Face", color = Color.White, fontSize = 18.sp)
+        DashboardButton("Capture Face", Color.Black) {
+            navController.navigate("face_capture")
         }
 
-        Button(
-            onClick = { navController.navigate("registered_students") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-        ) {
-            Text("View Registered Students", color = Color.White, fontSize = 18.sp)
+        DashboardButton("View Registered Students", Color.Gray) {
+            navController.navigate("registered_students")
         }
 
-        Button(
-            onClick = { navController.navigate("face_recognition") },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-        ) {
-            Text("Verify", color = Color.White, fontSize = 18.sp)
+        DashboardButton("Verify", Color.Blue) {
+            navController.navigate("face_recognition")
         }
 
-        Button(
-            onClick = {
-                FirestoreUploader.uploadJSONToFirestore(
-                    context,
-                    onProgress = { progress -> uploadProgress = progress },
-                    onUploading = { isUploading = it }
-                )
-            },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Green),
-            enabled = !isUploading
-        ) {
-            Text("Upload Face Data", color = Color.White, fontSize = 18.sp)
+        DashboardButton("Upload Face Data", Color.Green, enabled = !isUploading) {
+            FirestoreUploader.uploadJSONToFirestore(
+                context,
+                onUploading = { isUploading = it },
+                onProgress = {},
+                onUploadComplete = { uploadComplete = it }
+            )
         }
-
-
-
 
         if (isUploading) {
-            Spacer(modifier = Modifier.height(10.dp))
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            Text("Uploading...", fontSize = 16.sp)
+            LoadingIndicator("Uploading...")
         }
 
-        Button(
-            onClick = {
-                FirestoreDownloader.downloadJSONFromFirestore(
-                    context,
-                    onDownloading = { isDownloading = it },
-                    onComplete = { downloadComplete = it }
-                )
-            },
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-            enabled = !isDownloading
-        ) {
-            Text("Download Face Data", color = Color.White, fontSize = 18.sp)
+        DashboardButton("Download Face Data", Color.Red, enabled = !isDownloading) {
+            FirestoreDownloader.downloadJSONFromFirestore(
+                context,
+                onDownloading = { isDownloading = it },
+                onDownloadComplete = { downloadComplete = it }
+            )
         }
 
         if (isDownloading) {
-            Spacer(modifier = Modifier.height(10.dp))
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            Text("Downloading...", fontSize = 16.sp)
+            LoadingIndicator("Downloading...")
         }
 
-        if (downloadComplete) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Text("Download Complete!", color = Color.Green, fontSize = 16.sp)
+        DashboardButton("Take Attendance", Color.Cyan) {
+            navController.navigate("crowd_sense_screen")
         }
+
+        DashboardButton("CHECK DATA", Color(0xFF9C27B0)) {
+            navController.navigate("DisplayDetailsScreen")
+        }
+    }
+}
+
+@Composable
+fun DashboardButton(text: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color),
+        enabled = enabled
+    ) {
+        Text(text, color = Color.White, fontSize = 18.sp)
+    }
+}
+
+@Composable
+fun LoadingIndicator(message: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(modifier = Modifier.height(10.dp))
+        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+        Text(message, fontSize = 16.sp)
     }
 }

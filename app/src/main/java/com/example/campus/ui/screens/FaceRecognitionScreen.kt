@@ -1,8 +1,8 @@
-package com.example.campus.ui
+package com.example.campus.ui.screens
 
 import android.Manifest
 import android.graphics.Bitmap
-import android.widget.Toast
+//import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
+import com.example.campus.util.BluetoothHelper
 import com.example.campus.util.CameraHelper
 import com.example.campus.util.FaceNetHelper
 import kotlinx.coroutines.Dispatchers
@@ -31,8 +32,11 @@ fun FaceRecognitionScreen(navController: NavController) {
     val previewView = remember { PreviewView(context) }
     val cameraHelper = remember { CameraHelper(context, lifecycleOwner, previewView) }
     val faceNetHelper = remember { FaceNetHelper(context) }
+//    val bluetoothHelper = remember { BluetoothHelper(context) }
 
     var recognitionMessage by remember { mutableStateOf("") }
+    var hostname by remember { mutableStateOf("") }
+    var hostrollnumber by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -58,7 +62,9 @@ fun FaceRecognitionScreen(navController: NavController) {
             horizontalArrangement = Arrangement.Start
         ) {
             Button(
-                onClick = { navController.popBackStack() },
+                onClick = {
+                    navController.popBackStack()
+                },
                 shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
             ) {
@@ -89,15 +95,20 @@ fun FaceRecognitionScreen(navController: NavController) {
 
                         val recognizedData = faceNetHelper.recognizeFace(embedding)
 
-                        recognitionMessage = if (recognizedData != null) {
+                        if (recognizedData != null) {
                             val (name, rollNumber) = recognizedData
-                            val verifiedMessage = "Name: $name, Roll No: $rollNumber Verified"
-                            coroutineScope.launch(Dispatchers.Main) {
-                                Toast.makeText(context, verifiedMessage, Toast.LENGTH_LONG).show()
-                            }
-                            verifiedMessage
+                            hostname = name
+                            hostrollnumber = rollNumber
+                            recognitionMessage = "Verified: $name ($rollNumber)"
+
+                            // Send data back to CrowdSense screen
+                            navController.previousBackStackEntry?.savedStateHandle?.set(
+                                "recognized_student",
+                                Pair(name, rollNumber)
+                            )
+                            navController.popBackStack()
                         } else {
-                            "Face Not Recognized"
+                            recognitionMessage = "Face Not Recognized"
                         }
                     }
                 }
