@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
-import com.example.campus.util.BluetoothHelper
+//import com.example.campus.util.BluetoothHelper
 import com.example.campus.util.CameraHelper
 import com.example.campus.util.FaceNetHelper
 import kotlinx.coroutines.Dispatchers
