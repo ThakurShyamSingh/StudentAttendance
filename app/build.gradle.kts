@@ -102,6 +102,14 @@ dependencies {
     implementation ("com.google.firebase:firebase-auth-ktx")
     implementation ("com.google.android.gms:play-services-auth:20.7.0")
 
+    implementation("androidx.compose.animation:animation:1.6.1") // use the latest matching your Compose version
+
+    implementation ("com.airbnb.android:lottie-compose:6.0.0")
+
+    implementation("androidx.compose.material:material-icons-extended:1.6.1")
+
+
+
 
 
 

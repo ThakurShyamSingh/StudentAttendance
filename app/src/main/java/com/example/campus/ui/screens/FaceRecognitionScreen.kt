@@ -1,7 +1,12 @@
 package com.example.campus.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -24,6 +29,12 @@ import com.example.campus.util.CameraHelper
 import com.example.campus.util.FaceNetHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.io.File
+//import androidx.compose.animation.AnimatedVisibility
+
+
+private const val TAG = "FaceRecognitionScreen"
 
 @Composable
 fun FaceRecognitionScreen(navController: NavController) {
@@ -34,26 +45,30 @@ fun FaceRecognitionScreen(navController: NavController) {
     val faceNetHelper = remember { FaceNetHelper(context) }
 
     var recognitionMessage by remember { mutableStateOf("") }
-    var hostname by remember { mutableStateOf("") }
-    var hostrollnumber by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { granted ->
+            Log.d(TAG, "Camera permission result: $granted")
             if (granted) {
+                Log.d(TAG, "Setting up camera")
                 cameraHelper.setupCamera()
             } else {
                 recognitionMessage = "Camera permission denied"
+                Toast.makeText(context, recognitionMessage, Toast.LENGTH_SHORT).show()
+                Log.d(TAG, "Camera permission denied")
             }
         }
     )
 
     LaunchedEffect(Unit) {
+        Log.d(TAG, "Launching camera permission request")
         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // Back Button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -62,6 +77,7 @@ fun FaceRecognitionScreen(navController: NavController) {
         ) {
             Button(
                 onClick = {
+                    Log.d(TAG, "Back button clicked")
                     navController.popBackStack()
                 },
                 shape = RoundedCornerShape(50),
@@ -71,21 +87,23 @@ fun FaceRecognitionScreen(navController: NavController) {
             }
         }
 
+        // Camera Preview with Face Guide Overlay
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier.fillMaxSize()
+            )
 
             // Face Guide Overlay
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val canvasWidth = size.width
                 val canvasHeight = size.height
-
                 val faceOvalWidth = canvasWidth * 0.7f
                 val faceOvalHeight = canvasHeight * 0.6f
 
                 val left = (canvasWidth - faceOvalWidth) / 2f
                 val top = (canvasHeight - faceOvalHeight) / 2f
 
-                // Draw face oval
                 drawOval(
                     color = Color.White.copy(alpha = 0.3f),
                     topLeft = Offset(left, top),
@@ -106,7 +124,6 @@ fun FaceRecognitionScreen(navController: NavController) {
                     radius = eyeRadius,
                     center = Offset(centerX - eyeOffsetX, centerY - eyeOffsetY)
                 )
-
                 drawCircle(
                     color = Color.White.copy(alpha = 0.8f),
                     radius = eyeRadius,
@@ -135,36 +152,69 @@ fun FaceRecognitionScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Scan Face Button with updated logic
         Button(
             onClick = {
+                Log.d(TAG, "Scan Face button clicked")
                 coroutineScope.launch(Dispatchers.IO) {
+                    Log.d(TAG, "Capturing face...")
                     cameraHelper.captureAndProcessFace { bitmap: Bitmap? ->
                         if (bitmap == null) {
                             recognitionMessage = "Failed to capture face"
+                            Log.d(TAG, "Face capture failed")
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, recognitionMessage, Toast.LENGTH_SHORT).show()
+                            }
                             return@captureAndProcessFace
                         }
 
+                        Log.d(TAG, "Generating embedding...")
                         val embedding = faceNetHelper.generateEmbedding(bitmap)
                         if (embedding == null) {
                             recognitionMessage = "Failed to generate embedding"
+                            Log.d(TAG, "Embedding generation failed")
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, recognitionMessage, Toast.LENGTH_SHORT).show()
+                            }
                             return@captureAndProcessFace
                         }
 
+                        Log.d(TAG, "Recognising face...")
                         val recognizedData = faceNetHelper.recognizeFace(embedding)
 
                         if (recognizedData != null) {
-                            val (name, rollNumber) = recognizedData
-                            hostname = name
-                            hostrollnumber = rollNumber
-                            recognitionMessage = "Verified: $name ($rollNumber)"
+                            val (_, rollNumber) = recognizedData
+                            Log.d(TAG, "Face recognized, roll number: $rollNumber")
+                            // Look up student details from the local JSON file.
+                            val student = getStudentsByRollNumber(context, rollNumber)
 
-                            navController.previousBackStackEntry?.savedStateHandle?.set(
-                                "recognized_student",
-                                Pair(name, rollNumber)
-                            )
-                            navController.popBackStack()
+                            if (student == null) {
+                                Log.d(TAG, "Student not found in local JSON")
+                                Handler(Looper.getMainLooper()).post {
+                                    Toast.makeText(context, "Face Not Recognised", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                val role = student.optString("role", "Student")
+                                Log.d(TAG, "Student found with role: $role")
+                                if (role != "Faculty" && role != "Admin") {
+                                    Log.d(TAG, "Role not permitted")
+                                    Handler(Looper.getMainLooper()).post {
+                                        Toast.makeText(context, "Not Admin", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Log.d(TAG, "Role permitted, navigating to crowd_sense_screen")
+                                    Handler(Looper.getMainLooper()).post {
+                                        val name = student.optString("name", "Unknown")
+                                        navController.navigate("crowd_sense_screen/${name}/${rollNumber}")
+
+                                    }
+                                }
+                            }
                         } else {
-                            recognitionMessage = "Face Not Recognized"
+                            Log.d(TAG, "Face recognition did not match any known face")
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, "Face Not Recognised", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
                 }
@@ -178,15 +228,37 @@ fun FaceRecognitionScreen(navController: NavController) {
             Text("Scan Face", color = Color.White, fontSize = 18.sp)
         }
 
-        if (recognitionMessage.isNotEmpty()) {
-            Text(
-                text = recognitionMessage,
-                color = if (recognitionMessage.contains("Verified", true)) Color.Green else Color.Red,
-                fontSize = 18.sp,
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
+
+
+    }
+}
+
+/**
+ * Retrieves student data from 'registered_faces.json' using the roll number.
+ */
+fun getStudentsByRollNumber(context: Context, rollNumber: String): JSONObject? {
+    Log.d(TAG, "Looking up student with roll number: $rollNumber")
+    val file = File(context.filesDir, "registered_faces.json")
+    if (!file.exists()) {
+        Log.d(TAG, "registered_faces.json not found")
+        return null
+    }
+
+    val jsonData = file.readText()
+    val jsonObject = JSONObject(jsonData)
+    if (!jsonObject.has("StudentDetails")) {
+        Log.d(TAG, "StudentDetails key not found in JSON")
+        return null
+    }
+
+    val studentArray = jsonObject.getJSONArray("StudentDetails")
+    for (i in 0 until studentArray.length()) {
+        val student = studentArray.getJSONObject(i)
+        if (student.getString("rollNumber") == rollNumber) {
+            Log.d(TAG, "Student found: $student")
+            return student
         }
     }
+    Log.d(TAG, "No matching student found")
+    return null
 }

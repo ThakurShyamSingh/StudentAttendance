@@ -64,8 +64,9 @@ object DataManipulator {
 
     // Save WiFi SSID
     fun saveSSIDToJson(context: Context, ssid: String) {
-        saveData(context, "wifissid", ssid)
+        saveData(context, "wifissid", ssid.trim('"'))
     }
+
 
     // Save Bluetooth host code
     fun saveBluetoothCodeToJson(context: Context, code: String) {

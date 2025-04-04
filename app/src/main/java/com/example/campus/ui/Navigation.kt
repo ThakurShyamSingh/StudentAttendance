@@ -4,9 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.campus.ui.screens.*
 
 enum class Routes(val route: String) {
@@ -17,14 +19,16 @@ enum class Routes(val route: String) {
     FACE_RECOGNITION("face_recognition"),
     CROWD_SENSE("crowd_sense_screen"),
     DISPLAY_DETAILS_SCREEN("DisplayDetailsScreen"),
-    STUDENT_MANAGER("student_manager")
+    STUDENT_MANAGER("student_manager"),
+    EDIT_FACE_SCREEN("edit_face_screen")
+
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
-    val lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current // Correct way to get LifecycleOwner
+    val lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current
 
     NavHost(navController = navController, startDestination = Routes.CAMPUS.route) {
         composable(Routes.CAMPUS.route) { CampusScreen(navController) }
@@ -32,12 +36,34 @@ fun AppNavigation() {
         composable(Routes.FACE_CAPTURE.route) { FaceCaptureScreen(navController) }
         composable(Routes.REGISTERED_STUDENTS.route) { RegisteredStudentsScreen(navController) }
         composable(Routes.FACE_RECOGNITION.route) { FaceRecognitionScreen(navController) }
-        composable(Routes.CROWD_SENSE.route) { CrowdSenseScreen(navController, context, lifecycleOwner  ) }
+
+        // Updated CROWD_SENSE route with name and rollNumber arguments
+        composable(
+            route = "${Routes.CROWD_SENSE.route}/{name}/{rollNumber}",
+            arguments = listOf(
+                navArgument("name") { type = NavType.StringType },
+                navArgument("rollNumber") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val name = backStackEntry.arguments?.getString("name") ?: "Unknown"
+            val rollNumber = backStackEntry.arguments?.getString("rollNumber") ?: "Unknown"
+            CrowdSenseScreen(
+                name = name, rollNumber = rollNumber,
+                navController = navController
+            )
+        }
+
         composable(Routes.DISPLAY_DETAILS_SCREEN.route) {
             DisplayDetailsScreen(context, lifecycleOwner)
         }
-        composable(Routes.STUDENT_MANAGER.route) { // <-- Add this block
+
+        composable(Routes.STUDENT_MANAGER.route) {
             StudentDataManagerScreen(context)
         }
+
+        composable(Routes.EDIT_FACE_SCREEN.route) {
+            EditFaceScreen(navController)
+        }
+
     }
 }

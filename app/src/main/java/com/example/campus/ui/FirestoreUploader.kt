@@ -17,12 +17,12 @@ object FirestoreUploader {
         context: Context,
         onProgress: (Float) -> Unit,
         onUploading: (Boolean) -> Unit,
-        onUploadComplete: (Boolean) -> Unit // Add this parameter
+        onUploadComplete: (Boolean) -> Unit
     ) {
         onUploading(true)
 
         CoroutineScope(Dispatchers.IO).launch {
-            val totalTasks = 2 // Two files to upload
+            val totalTasks = 2
             var completedTasks = 0
 
             uploadRegisteredFaces(context, onProgress) { success ->
@@ -80,7 +80,6 @@ object FirestoreUploader {
                     "embedding" to embeddingList
                 )
 
-
                 firestore.collection("students").document(rollNumber)
                     .set(studentData)
                     .addOnSuccessListener {
@@ -88,8 +87,8 @@ object FirestoreUploader {
                         onProgress(uploadedCount.toFloat() / totalStudents)
 
                         if (uploadedCount == totalStudents) {
-                            onComplete(true)
                             Log.d("FirestoreUploader", "All students uploaded successfully!")
+                            onComplete(true)
                         }
                     }
                     .addOnFailureListener { e ->
@@ -123,26 +122,44 @@ object FirestoreUploader {
             }
 
             val attendanceObject = jsonObject.getJSONObject("attendance")
-            val totalDates = attendanceObject.length()
+            val dateKeys = attendanceObject.keys()
             var uploadedDates = 0
+            var hasError = false
+            val totalDates = attendanceObject.length()
 
-            val keys = attendanceObject.keys()
-            while (keys.hasNext()) {
-                val date = keys.next()
-                val dateData = attendanceObject.getJSONObject(date)
+            while (dateKeys.hasNext()) {
+                val date = dateKeys.next()
+                val timeObject = attendanceObject.getJSONObject(date)
+                val timeKeys = timeObject.keys()
+
+                val timeSlotData = mutableMapOf<String, Map<String, Any>>()
+
+                while (timeKeys.hasNext()) {
+                    val time = timeKeys.next()
+                    val values = timeObject.getJSONObject(time)
+
+                    val flatData = values.toMap()
+                    timeSlotData[time] = flatData
+                }
 
                 firestore.collection("attendance").document(date)
-                    .set(dateData.toMap())
+                    .set(timeSlotData)
                     .addOnSuccessListener {
                         uploadedDates++
+                        Log.d("FirestoreUploader", "Uploaded attendance for $date")
+
                         if (uploadedDates == totalDates) {
-                            onComplete(true)
-                            Log.d("FirestoreUploader", "All attendance data uploaded successfully!")
+                            onComplete(!hasError)
                         }
                     }
                     .addOnFailureListener { e ->
+                        hasError = true
+                        uploadedDates++
                         Log.e("FirestoreUploader", "Failed to upload attendance for $date", e)
-                        onComplete(false)
+
+                        if (uploadedDates == totalDates) {
+                            onComplete(false)
+                        }
                     }
             }
         } catch (e: Exception) {
@@ -160,8 +177,6 @@ object FirestoreUploader {
         if (completedTasks == totalTasks) {
             onUploading(false)
             onComplete(true)
-        } else {
-            onComplete(false)
         }
     }
 
@@ -178,3 +193,4 @@ object FirestoreUploader {
         return map
     }
 }
+
