@@ -9,6 +9,7 @@ import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.ParcelUuid
@@ -16,9 +17,6 @@ import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.firebase.firestore.FirebaseFirestore
-import java.io.File
-import java.text.SimpleDateFormat
 import java.util.*
 
 class BluetoothHelper(private val context: Context) {
@@ -27,13 +25,11 @@ class BluetoothHelper(private val context: Context) {
     private val bluetoothAdapter: BluetoothAdapter? = bluetoothManager.adapter
     private val advertiser = bluetoothAdapter?.bluetoothLeAdvertiser
     private var isBroadcasting = false
-    private val firebaseDb = FirebaseFirestore.getInstance()
-    private val localFile = File(context.filesDir, "attendance.json")
 
     private var advertiseCallback: AdvertiseCallback? = null
 
     private fun generateUniqueCode(): String {
-        return UUID.randomUUID().toString().replace("-", "").take(8) // Reduce size to fit within 31 bytes
+        return UUID.randomUUID().toString().replace("-", "").take(8)
     }
 
     fun startBroadcast() {
@@ -43,8 +39,16 @@ class BluetoothHelper(private val context: Context) {
             return
         }
 
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            Log.e("BluetoothHelper", "Bluetooth not available or disabled")
+        if (bluetoothAdapter == null) {
+            Log.e("BluetoothHelper", "Bluetooth not supported")
+            return
+        }
+
+        if (!bluetoothAdapter.isEnabled) {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            if (context is Activity) {
+                context.startActivityForResult(enableBtIntent, 1002)
+            }
             return
         }
 
@@ -73,20 +77,17 @@ class BluetoothHelper(private val context: Context) {
             .build()
 
         val serviceUuid = ParcelUuid(UUID.randomUUID())
-
         val dataBytes = uniqueCode.toByteArray(Charsets.UTF_8)
-        Log.d("BluetoothHelper", "Advertising data size: ${dataBytes.size} bytes")
 
         val advertiseData = AdvertiseData.Builder()
-            .setIncludeDeviceName(false) // Remove device name
-            .addServiceData(serviceUuid, dataBytes) // Ensure it's short
+            .setIncludeDeviceName(false)
+            .addServiceData(serviceUuid, dataBytes)
             .build()
 
         advertiseCallback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
                 Log.d("BluetoothHelper", "Broadcasting: $uniqueCode")
-                saveToLocal(uniqueCode)
-                saveToFirebase(uniqueCode)
+                DataManipulator.saveBluetoothCodeToJson(context, uniqueCode)
             }
 
             override fun onStartFailure(errorCode: Int) {
@@ -113,32 +114,17 @@ class BluetoothHelper(private val context: Context) {
         }
     }
 
-    private fun saveToLocal(code: String) {
-        val json = "{ \"bluetoothhost\": \"$code\" }"
-        localFile.appendText("$json\n")
-    }
-
-
-    private fun saveToFirebase(code: String) {
-        val data = hashMapOf("bluetoothhost" to code)
-        firebaseDb.collection("attendance").document(date).collection(time)
-            .add(mapOf("bluetoothhost" to code))
-            .addOnSuccessListener { Log.d("BluetoothHelper", "Saved to Firebase") }
-            .addOnFailureListener { Log.e("BluetoothHelper", "Firebase error", it) }
-    }
-
     private fun hasRequiredPermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val bluetoothConnectPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
-            val bluetoothScanPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
-            val bluetoothAdvertisePermission = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE)
-
-            bluetoothConnectPermission == PackageManager.PERMISSION_GRANTED &&
-                    bluetoothScanPermission == PackageManager.PERMISSION_GRANTED &&
-                    bluetoothAdvertisePermission == PackageManager.PERMISSION_GRANTED
+            val connect = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+            val scan = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+            val advertise = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADVERTISE)
+            connect == PackageManager.PERMISSION_GRANTED &&
+                    scan == PackageManager.PERMISSION_GRANTED &&
+                    advertise == PackageManager.PERMISSION_GRANTED
         } else {
-            val bluetoothAdminPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN)
-            bluetoothAdminPermission == PackageManager.PERMISSION_GRANTED
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_ADMIN) ==
+                    PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -160,25 +146,14 @@ class BluetoothHelper(private val context: Context) {
             }
         }
 
-        if (permissions.isNotEmpty()) {
+        if (permissions.isNotEmpty() && context is Activity) {
+            ActivityCompat.requestPermissions(context, permissions.toTypedArray(), 1001)
+        } else {
             AlertDialog.Builder(context)
                 .setTitle("Bluetooth Permissions Required")
-                .setMessage("This feature requires Bluetooth permissions to function. Please grant them.")
-                .setPositiveButton("Grant Permissions") { _, _ ->
-                    ActivityCompat.requestPermissions(
-                        context as Activity,
-                        permissions.toTypedArray(),
-                        1001
-                    )
-                }
-                .setNegativeButton("Cancel") { dialog, _ ->
-                    dialog.dismiss()
-                }
+                .setMessage("Please grant the required Bluetooth permissions.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
                 .show()
         }
     }
-    val dateFormat = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault())
-    val timeFormat = SimpleDateFormat("HH-mm", Locale.getDefault())
-    val date: String = dateFormat.format(Date())
-    val time: String = timeFormat.format(Date())
 }

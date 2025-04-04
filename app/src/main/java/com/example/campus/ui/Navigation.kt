@@ -16,7 +16,8 @@ enum class Routes(val route: String) {
     REGISTERED_STUDENTS("registered_students"),
     FACE_RECOGNITION("face_recognition"),
     CROWD_SENSE("crowd_sense_screen"),
-    DISPLAY_DETAILS_SCREEN("DisplayDetailsScreen")
+    DISPLAY_DETAILS_SCREEN("DisplayDetailsScreen"),
+    STUDENT_MANAGER("student_manager")
 }
 
 @Composable
@@ -34,6 +35,9 @@ fun AppNavigation() {
         composable(Routes.CROWD_SENSE.route) { CrowdSenseScreen(navController, context, lifecycleOwner  ) }
         composable(Routes.DISPLAY_DETAILS_SCREEN.route) {
             DisplayDetailsScreen(context, lifecycleOwner)
+        }
+        composable(Routes.STUDENT_MANAGER.route) { // <-- Add this block
+            StudentDataManagerScreen(context)
         }
     }
 }

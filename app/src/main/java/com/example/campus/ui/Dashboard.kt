@@ -49,12 +49,12 @@ fun DashboardScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        DashboardButton("Capture Face", Color.Black) {
+        DashboardButton("Register Students", Color.Black) {
             navController.navigate("face_capture")
         }
 
         DashboardButton("View Registered Students", Color.Gray) {
-            navController.navigate("registered_students")
+            navController.navigate("student_manager")
         }
 
         DashboardButton("Verify", Color.Blue) {
@@ -78,7 +78,8 @@ fun DashboardScreen(navController: NavController) {
             FirestoreDownloader.downloadJSONFromFirestore(
                 context,
                 onDownloading = { isDownloading = it },
-                onDownloadComplete = { downloadComplete = it }
+                onDownloadComplete = { downloadComplete = it },
+                onProgress = {}
             )
         }
 

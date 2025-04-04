@@ -76,8 +76,10 @@ object FirestoreUploader {
                 val studentData = mapOf(
                     "name" to student.getString("name"),
                     "rollNumber" to rollNumber,
+                    "role" to student.getString("role"),
                     "embedding" to embeddingList
                 )
+
 
                 firestore.collection("students").document(rollNumber)
                     .set(studentData)

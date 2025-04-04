@@ -2,73 +2,74 @@ package com.example.campus.util
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.location.Location
-import android.location.LocationManager
+import android.location.*
+import android.os.CancellationSignal
+import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldValue
-import java.io.File
-import java.util.Calendar
+import java.util.concurrent.Executors
 
 class LocationHelper(private val context: Context) {
-
-    private val firebaseDb = FirebaseFirestore.getInstance()
-    private val localFile = File(context.filesDir, "attendance.json")
 
     fun getLocation() {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
-        // 🔴 Check for location permissions before proceeding
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) &&
+            !locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            Log.e("LocationHelper", "No location provider enabled")
+            promptEnableGPS()
+            return
+        }
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             Log.e("LocationHelper", "Location permission not granted")
             return
         }
 
-        try {
-            val location: Location? = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        val location: Location? = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
 
-            location?.let {
-                val lat = it.latitude
-                val lng = it.longitude
-                saveToLocal(lat, lng)
-                saveToFirebase(lat, lng)
-            } ?: Log.e("LocationHelper", "Failed to get location")
-        } catch (e: SecurityException) {
-            Log.e("LocationHelper", "SecurityException: Location permission denied", e)
+        if (location != null) {
+            processLocation(location)
+        } else {
+            requestNewLocation(locationManager)
         }
     }
 
-    private fun saveToLocal(lat: Double, lng: Double) {
-        val json = "{ \"locationhost\": { \"lat\": $lat, \"lng\": $lng } }"
-        localFile.appendText("$json\n")
+    private fun requestNewLocation(locationManager: LocationManager) {
+        try {
+            val executor = Executors.newSingleThreadExecutor()
+            locationManager.getCurrentLocation(
+                LocationManager.GPS_PROVIDER,
+                CancellationSignal(),
+                executor
+            ) { location ->
+                if (location != null) {
+                    processLocation(location)
+                } else {
+                    Log.e("LocationHelper", "getCurrentLocation returned null")
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.e("LocationHelper", "SecurityException: Location permission denied", e)
+        } catch (e: Exception) {
+            Log.e("LocationHelper", "Error requesting current location", e)
+        }
     }
 
-    private fun saveToFirebase(lat: Double, lng: Double) {
-        val currentDate = getCurrentDate()
-        val currentHour = getCurrentHour()
-
-        val data = hashMapOf(
-            "locationhost" to mapOf("lat" to lat, "lng" to lng),
-            "timestamp" to FieldValue.serverTimestamp()
-        )
-
-        firebaseDb.collection("attendance").document(currentDate)
-            .collection(currentHour)
-            .add(data)
-            .addOnSuccessListener { Log.d("LocationHelper", "Saved to Firebase") }
-            .addOnFailureListener { Log.e("LocationHelper", "Firebase error", it) }
+    private fun processLocation(location: Location) {
+        val lat = location.latitude
+        val lng = location.longitude
+        Log.d("LocationHelper", "Location retrieved - Latitude: $lat, Longitude: $lng")
+        DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng)
     }
 
-    private fun getCurrentDate(): String {
-        val calendar = Calendar.getInstance()
-        return "${calendar.get(Calendar.YEAR)}-${calendar.get(Calendar.MONTH) + 1}-${calendar.get(Calendar.DAY_OF_MONTH)}"
-    }
-
-    private fun getCurrentHour(): String {
-        val calendar = Calendar.getInstance()
-        return calendar.get(Calendar.HOUR_OF_DAY).toString()
+    private fun promptEnableGPS() {
+        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        context.startActivity(intent)
     }
 }
