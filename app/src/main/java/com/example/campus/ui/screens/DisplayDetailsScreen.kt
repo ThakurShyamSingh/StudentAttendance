@@ -21,18 +21,17 @@ import java.io.FileWriter
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
-
 import androidx.compose.ui.Alignment
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DisplayDetailsScreen(context: Context, lifecycleOwner: LifecycleOwner) {
-    var attendanceMap by remember { mutableStateOf<Map<String, Map<String, Map<String, String>>>>(emptyMap()) }
-    var triggerRecompose by remember { mutableStateOf(0) }
+    var attendanceMap by remember {
+        mutableStateOf<Map<String, Pair<String?, Map<String, Map<String, String>>>>>(emptyMap())
+    }
+    var triggerRecompose by remember { mutableIntStateOf(0) }
     var editMode by remember { mutableStateOf(false) }
-    val selectedItems = remember { mutableStateListOf<Pair<String, String>>() } // (date, time)
+    val selectedItems = remember { mutableStateListOf<Pair<String, String>>() }
 
     LaunchedEffect(triggerRecompose) {
         attendanceMap = withContext(Dispatchers.IO) {
@@ -89,13 +88,23 @@ fun DisplayDetailsScreen(context: Context, lifecycleOwner: LifecycleOwner) {
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            attendanceMap.forEach { (date, hoursMap) ->
+            attendanceMap.forEach { (date, pair) ->
+                val (hourField, hoursMap) = pair
+
                 item {
-                    Text(
-                        text = "Date: $date",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                        Text(
+                            text = "Date: $date",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        hourField?.let {
+                            Text(
+                                text = "Hour: $it",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                        }
+                    }
                 }
 
                 items(hoursMap.keys.toList()) { hour ->
@@ -110,7 +119,11 @@ fun DisplayDetailsScreen(context: Context, lifecycleOwner: LifecycleOwner) {
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(text = "Time: $hour", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text(
+                                    text = "Hour: $hour",
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
 
                                 if (editMode) {
                                     Checkbox(
@@ -137,31 +150,34 @@ fun DisplayDetailsScreen(context: Context, lifecycleOwner: LifecycleOwner) {
     }
 }
 
-
-
-fun readCrowdSenseJson(context: Context): Map<String, Map<String, Map<String, String>>> {
+fun readCrowdSenseJson(context: Context): Map<String, Pair<String?, Map<String, Map<String, String>>>> {
     val file = File(context.filesDir, "crowdsense.json")
     if (!file.exists()) return emptyMap()
 
     return try {
         val jsonObject = JSONObject(file.readText())
         val attendance = jsonObject.optJSONObject("attendance") ?: return emptyMap()
-        val result = mutableMapOf<String, Map<String, Map<String, String>>>()
+        val result = mutableMapOf<String, Pair<String?, Map<String, Map<String, String>>>>()
 
         for (date in attendance.keys()) {
             val dateEntry = attendance.getJSONObject(date)
             val timeMap = mutableMapOf<String, Map<String, String>>()
+            var hourValue: String? = null
 
-            for (time in dateEntry.keys()) {
-                val entryObject = dateEntry.getJSONObject(time)
-                val entryMap = mutableMapOf<String, String>()
-                for (key in entryObject.keys()) {
-                    entryMap[key] = entryObject.getString(key)
+            for (key in dateEntry.keys()) {
+                val value = dateEntry.get(key)
+                if (key == "hour" && value is String) {
+                    hourValue = value
+                } else if (value is JSONObject) {
+                    val entryMap = mutableMapOf<String, String>()
+                    for (entryKey in value.keys()) {
+                        entryMap[entryKey] = value.getString(entryKey)
+                    }
+                    timeMap[key] = entryMap
                 }
-                timeMap[time] = entryMap
             }
 
-            result[date] = timeMap
+            result[date] = hourValue to timeMap
         }
 
         result
@@ -182,7 +198,7 @@ fun deleteEntryFromCrowdsenseJson(context: Context, date: String, time: String) 
         val dateObject = attendance.optJSONObject(date) ?: return
         dateObject.remove(time)
 
-        if (dateObject.length() == 0) {
+        if (dateObject.length() == 0 || (dateObject.length() == 1 && dateObject.has("hour"))) {
             attendance.remove(date)
         } else {
             attendance.put(date, dateObject)

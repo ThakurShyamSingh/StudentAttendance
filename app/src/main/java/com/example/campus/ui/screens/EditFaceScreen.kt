@@ -59,9 +59,6 @@ fun EditFaceScreen(navController: NavController) {
             Text("Edit Face Data", fontSize = 24.sp)
             Spacer(modifier = Modifier.height(20.dp))
 
-            EditFaceButton("View Registered Students", Color.Gray) {
-                navController.navigate("student_manager")
-            }
 
             EditFaceButton("Check Data", Color(0xFF9C27B0)) {
                 navController.navigate("DisplayDetailsScreen")
@@ -95,3 +92,4 @@ fun EditFaceScreen(navController: NavController) {
         }
     }
 }
+

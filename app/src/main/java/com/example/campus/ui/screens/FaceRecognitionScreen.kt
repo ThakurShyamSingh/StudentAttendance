@@ -205,7 +205,9 @@ fun FaceRecognitionScreen(navController: NavController) {
                                     Log.d(TAG, "Role permitted, navigating to crowd_sense_screen")
                                     Handler(Looper.getMainLooper()).post {
                                         val name = student.optString("name", "Unknown")
-                                        navController.navigate("crowd_sense_screen/${name}/${rollNumber}")
+//                                        navController.navigate("crowd_sense_screen/${name}/${rollNumber}")
+                                        navController.navigate("hour_selector_screen/$name/$rollNumber")
+
 
                                     }
                                 }

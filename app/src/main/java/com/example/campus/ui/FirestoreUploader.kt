@@ -132,14 +132,19 @@ object FirestoreUploader {
                 val timeObject = attendanceObject.getJSONObject(date)
                 val timeKeys = timeObject.keys()
 
-                val timeSlotData = mutableMapOf<String, Map<String, Any>>()
+                val timeSlotData = mutableMapOf<String, Any>()
 
                 while (timeKeys.hasNext()) {
                     val time = timeKeys.next()
-                    val values = timeObject.getJSONObject(time)
+                    val value = timeObject.get(time)
 
-                    val flatData = values.toMap()
-                    timeSlotData[time] = flatData
+                    if (value is JSONObject) {
+                        // It's a time slot like "09", "10", etc.
+                        timeSlotData[time] = value.toMap()
+                    } else {
+                        // It's a direct value like "hour": "10"
+                        timeSlotData[time] = value
+                    }
                 }
 
                 firestore.collection("attendance").document(date)
@@ -167,6 +172,7 @@ object FirestoreUploader {
             onComplete(false)
         }
     }
+
 
     private fun checkCompletion(
         onUploading: (Boolean) -> Unit,

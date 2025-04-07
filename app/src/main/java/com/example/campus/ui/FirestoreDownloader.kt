@@ -98,33 +98,49 @@ object FirestoreDownloader {
         context: Context,
         onComplete: (Boolean) -> Unit
     ) {
-        // Download from the "attendance" collection
         getFirestore().collection("attendance")
             .get()
             .addOnSuccessListener { snapshot ->
-                val attendanceObject = JSONObject()
-                for (doc in snapshot.documents) {
-                    val date = doc.id
-                    // Cast doc.data to Map<*, *> to avoid type mismatch.
-                    val dateData = JSONObject(doc.data as Map<*, *>)
-                    attendanceObject.put(date, dateData)
-                }
+                try {
+                    val attendanceObject = JSONObject()
 
-                val jsonObject = JSONObject().apply {
-                    put("attendance", attendanceObject)
-                }
+                    for (doc in snapshot.documents) {
+                        val date = doc.id
+                        val dateDataMap = doc.data ?: continue
+                        val timeSlotObject = JSONObject()
 
-                // Write to crowdsense.json
-                val file = File(context.filesDir, "crowdsense.json")
-                file.writeText(jsonObject.toString(4))
-                Log.d("FirestoreDownloader", "Downloaded crowdsense.json successfully")
-                onComplete(true)
+                        for ((time, value) in dateDataMap) {
+                            if (value is Map<*, *>) {
+                                // Convert nested Map to JSONObject
+                                timeSlotObject.put(time, JSONObject(value as Map<*, *>))
+                            } else {
+                                timeSlotObject.put(time, value)
+                            }
+                        }
+
+                        attendanceObject.put(date, timeSlotObject)
+                    }
+
+                    val finalJson = JSONObject().apply {
+                        put("attendance", attendanceObject)
+                    }
+
+                    val file = File(context.filesDir, "crowdsense.json")
+                    file.writeText(finalJson.toString(4))
+                    Log.d("FirestoreDownloader", "Downloaded crowdsense.json successfully")
+                    onComplete(true)
+
+                } catch (e: Exception) {
+                    Log.e("FirestoreDownloader", "Error processing attendance data", e)
+                    onComplete(false)
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("FirestoreDownloader", "Failed to download crowdsense.json", e)
                 onComplete(false)
             }
     }
+
 
     private fun checkCompletion(
         onDownloading: (Boolean) -> Unit,

@@ -32,7 +32,8 @@ class BluetoothHelper(private val context: Context) {
         return UUID.randomUUID().toString().replace("-", "").take(8)
     }
 
-    fun startBroadcast() {
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun startBroadcast(hour: String) {
         if (!hasRequiredPermissions()) {
             Log.e("BluetoothHelper", "Bluetooth permissions not granted")
             requestBluetoothPermissions()
@@ -59,14 +60,14 @@ class BluetoothHelper(private val context: Context) {
 
         try {
             isBroadcasting = true
-            broadcastCode()
+            broadcastCode(hour)
         } catch (e: SecurityException) {
             Log.e("BluetoothHelper", "Permission error: ${e.message}")
         }
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_ADVERTISE)
-    private fun broadcastCode() {
+    private fun broadcastCode(hour: String) {
         if (!isBroadcasting) return
 
         val uniqueCode = generateUniqueCode()
@@ -87,7 +88,7 @@ class BluetoothHelper(private val context: Context) {
         advertiseCallback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
                 Log.d("BluetoothHelper", "Broadcasting: $uniqueCode")
-                DataManipulator.saveBluetoothCodeToJson(context, uniqueCode)
+                DataManipulator.saveBluetoothCodeToJson(context, uniqueCode,hour)
             }
 
             override fun onStartFailure(errorCode: Int) {

@@ -3,7 +3,9 @@ package com.example.campus.ui.screens
 import android.os.Handler
 import android.os.Looper
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,17 +24,16 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.navigation.NavController
 import com.airbnb.lottie.compose.*
-import com.example.campus.util.LocationHelper
-import com.example.campus.util.WiFiHelper
-import com.example.campus.util.BluetoothHelper
+import com.example.campus.util.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.campus.ui.FirestoreUploader.uploadJSONToFirestore
 
 @Composable
 fun CrowdSenseScreen(
     name: String,
     rollNumber: String,
-    navController: NavController
+    navController: NavController,
+    hour: String
 ) {
     val context = LocalContext.current
     val lifecycleOwner = context as LifecycleOwner
@@ -41,15 +42,23 @@ fun CrowdSenseScreen(
     val locationHelper = remember { LocationHelper(context) }
 
     var backEnabled by remember { mutableStateOf(false) }
+    var processesStarted by remember { mutableStateOf(false) }
 
-    // Launchers
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             if (isGranted) {
                 Toast.makeText(context, "Fetching location...", Toast.LENGTH_SHORT).show()
                 Handler(Looper.getMainLooper()).postDelayed({
-                    locationHelper.getLocation()
+                    try {
+                        locationHelper.getLocation { lat, lng ->
+                            DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
+                            processesStarted = true
+                        }
+                    } catch (e: SecurityException) {
+                        Log.e("CrowdSenseScreen", "Permission granted but failed to get location: ${e.message}")
+                        Toast.makeText(context, "Failed to fetch location due to permission", Toast.LENGTH_SHORT).show()
+                    }
                 }, 500)
             } else {
                 Toast.makeText(context, "Location permission denied", Toast.LENGTH_SHORT).show()
@@ -67,9 +76,17 @@ fun CrowdSenseScreen(
                         Manifest.permission.ACCESS_FINE_LOCATION
                     ) == PackageManager.PERMISSION_GRANTED
 
-                    if (hasPermission) {
+                    if (hasPermission && !processesStarted) {
                         Handler(Looper.getMainLooper()).postDelayed({
-                            locationHelper.getLocation()
+                            try {
+                                locationHelper.getLocation { lat, lng ->
+                                    DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
+                                    processesStarted = true
+                                }
+                            } catch (e: SecurityException) {
+                                Log.e("CrowdSenseScreen", "Location error in ON_RESUME: ${e.message}")
+                                Toast.makeText(context, "Unable to get location.", Toast.LENGTH_SHORT).show()
+                            }
                         }, 500)
                     }
                 }
@@ -85,44 +102,54 @@ fun CrowdSenseScreen(
         }
 
         lifecycleOwner.lifecycle.addObserver(observer)
+
         onDispose {
+            Log.d("CrowdSenseScreen", "onDispose triggered – stopping hotspot & Bluetooth")
+            wifiHelper.stopHotspot()
+            bluetoothHelper.stopBroadcast()
+            Toast.makeText(context, "Hotspot and Bluetooth Broadcast Stopped", Toast.LENGTH_SHORT).show()
+
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
-    // Start all processes once
+    // Initial trigger
     LaunchedEffect(Unit) {
-        wifiHelper.createHotspot()
-        bluetoothHelper.startBroadcast()
-        Toast.makeText(context, "Hotspot & Bluetooth Started", Toast.LENGTH_SHORT).show()
-
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
+        wifiHelper.stopHotspot()
+
         if (hasPermission) {
             Toast.makeText(context, "Fetching location...", Toast.LENGTH_SHORT).show()
             delay(500)
-            locationHelper.getLocation()
+            try {
+                locationHelper.getLocation { lat, lng ->
+                    startProcessesOnce(context, wifiHelper, bluetoothHelper, hour)
+                    DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
+                }
+            } catch (e: SecurityException) {
+                Log.e("CrowdSenseScreen", "Location permission error: ${e.message}")
+                Toast.makeText(context, "Failed to fetch location due to permission", Toast.LENGTH_SHORT).show()
+            }
         } else {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
-        // Auto navigate to dashboard after 1 minute
-        delay(60_000)
+        delay(300_000) // wait 5 minutes
+        wifiHelper.stopHotspot()
         backEnabled = true
         navController.navigate("dashboard") {
             popUpTo("crowd_sense_screen") { inclusive = true }
         }
     }
 
-    // Prevent premature back navigation
     BackHandler(enabled = !backEnabled) {
         Toast.makeText(context, "Attendance in progress. Please wait...", Toast.LENGTH_SHORT).show()
     }
 
-    // Animation (using Lottie)
     val composition by rememberLottieComposition(LottieCompositionSpec.Asset("Animation.json"))
     val progress by animateLottieCompositionAsState(
         composition,
@@ -147,4 +174,27 @@ fun CrowdSenseScreen(
 
         Text("Taking attendance...\nPlease wait a moment.", fontSize = 16.sp, modifier = Modifier.padding(top = 24.dp))
     }
+}
+
+@androidx.annotation.RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+private fun startProcessesOnce(
+    context: Context,
+    wifiHelper: WiFiHelper,
+    bluetoothHelper: BluetoothHelper,
+    hour: String
+) {
+    Handler(Looper.getMainLooper()).postDelayed( {
+        wifiHelper.createHotspot(hour)
+        try{
+            bluetoothHelper.startBroadcast(hour)
+        }catch (e: Exception){
+            Log.e("CrowdSenseScreen", "Bluetooth enable error: ${e.message}")
+        }
+        Toast.makeText(context, "Hotspot & Bluetooth Started", Toast.LENGTH_SHORT).show()
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            uploadJSONToFirestore(context, {}, {}, {})
+        }, 5000)
+
+    }, 1500)
 }

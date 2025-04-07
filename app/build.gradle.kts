@@ -107,14 +107,7 @@ dependencies {
     implementation ("com.airbnb.android:lottie-compose:6.0.0")
 
     implementation("androidx.compose.material:material-icons-extended:1.6.1")
-
-
-
-
-
-
-
-
+    implementation("com.google.android.gms:play-services-location:21.0.1")
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -123,6 +116,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-
-
 }

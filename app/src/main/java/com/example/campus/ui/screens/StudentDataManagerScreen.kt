@@ -5,21 +5,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.google.firebase.firestore.ktx.firestore
+import com.google.firebase.ktx.Firebase
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import com.google.firebase.firestore.ktx.firestore
-import com.google.firebase.ktx.Firebase
 
 @Composable
-fun StudentDataManagerScreen(context: Context) {
+fun StudentDataManagerScreen(context: Context, navController: NavController) {
     var studentList by remember { mutableStateOf(listOf<JSONObject>()) }
     var selectedRolls by remember { mutableStateOf(setOf<String>()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -32,76 +35,87 @@ fun StudentDataManagerScreen(context: Context) {
         it.getString("rollNumber").contains(searchQuery, ignoreCase = true)
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            label = { Text("Search by Roll Number") },
-            modifier = Modifier.fillMaxWidth()
-        )
+    Scaffold(
+        bottomBar = {
+            BottomNavigationBar(navController)
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                label = { Text("Search by Roll Number") },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(filteredList) { student ->
-                val rollNumber = student.getString("rollNumber")
-                val name = student.getString("name")
-                val role = student.getString("role")
-                val isSelected = selectedRolls.contains(rollNumber)
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(filteredList) { student ->
+                    val rollNumber = student.getString("rollNumber")
+                    val name = student.getString("name")
+                    val role = student.getString("role")
+                    val isSelected = selectedRolls.contains(rollNumber)
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable {
-                            selectedRolls = if (isSelected) {
-                                selectedRolls - rollNumber
-                            } else {
-                                selectedRolls + rollNumber
-                            }
-                        },
-                    elevation = CardDefaults.cardElevation(4.dp),
-                ) {
-                    Row(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isSelected,
-                            onCheckedChange = {
+                            .padding(vertical = 4.dp)
+                            .clickable {
                                 selectedRolls = if (isSelected) {
                                     selectedRolls - rollNumber
                                 } else {
                                     selectedRolls + rollNumber
                                 }
+                            },
+                        elevation = CardDefaults.cardElevation(4.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = {
+                                    selectedRolls = if (isSelected) {
+                                        selectedRolls - rollNumber
+                                    } else {
+                                        selectedRolls + rollNumber
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(text = "$name ($rollNumber)", style = MaterialTheme.typography.titleMedium)
+                                Text(text = role, style = MaterialTheme.typography.bodySmall)
                             }
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(text = "$name ($rollNumber)", style = MaterialTheme.typography.titleMedium)
-                            Text(text = role, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
             }
-        }
 
-        if (selectedRolls.isNotEmpty()) {
-            Button(
-                onClick = {
-                    deleteStudentsByRollNumbers(context, selectedRolls)
-                    selectedRolls.forEach { rollNumber ->
-                        deleteStudentFromFirestoreWithFallback(context, rollNumber) {}
-                    }
-                    studentList = loadStudentsFromJSON(context)
-                    selectedRolls = emptySet()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Delete Selected (${selectedRolls.size})")
+            if (selectedRolls.isNotEmpty()) {
+                Button(
+                    onClick = {
+                        deleteStudentsByRollNumbers(context, selectedRolls)
+                        selectedRolls.forEach { rollNumber ->
+                            deleteStudentFromFirestoreWithFallback(context, rollNumber) {}
+                        }
+                        studentList = loadStudentsFromJSON(context)
+                        selectedRolls = emptySet()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Delete Selected (${selectedRolls.size})")
+                }
             }
         }
     }
@@ -138,7 +152,6 @@ fun deleteStudentsByRollNumbers(context: Context, rollNumbers: Set<String>) {
     file.writeText(jsonObject.toString(4))
 }
 
-
 fun deleteStudentFromFirestoreWithFallback(
     context: Context,
     rollNumber: String,
@@ -153,7 +166,6 @@ fun deleteStudentFromFirestoreWithFallback(
         }
         .addOnFailureListener { e ->
             e.printStackTrace()
-            // Save to deleteData.json
             saveFailedDeletion(context, rollNumber)
             onComplete(false)
         }
@@ -175,7 +187,6 @@ private fun saveFailedDeletion(context: Context, rollNumber: String) {
 
     val rollArray = jsonObject.optJSONArray("rollNumbers") ?: JSONArray()
 
-    // Avoid duplicates
     val alreadyExists = (0 until rollArray.length()).any {
         rollArray.getString(it) == rollNumber
     }
@@ -187,5 +198,32 @@ private fun saveFailedDeletion(context: Context, rollNumber: String) {
     }
 }
 
-
-
+@Composable
+fun BottomNavigationBar(navController: NavController) {
+    NavigationBar {
+        NavigationBarItem(
+            icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
+            label = { Text("Home") },
+            selected = false,
+            onClick = { navController.navigate("dashboard") }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Filled.Edit, contentDescription = "Manage Attendance") },
+            label = { Text("Manage") },
+            selected = false,
+            onClick = { navController.navigate("edit_face_screen") }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Filled.Visibility, contentDescription = "View Attendance") },
+            label = { Text("View") },
+            selected = false,
+            onClick = { }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Filled.Face, contentDescription = "Edit Face Data") },
+            label = { Text("Edit Faces") },
+            selected = false,
+            onClick = { navController.navigate("student_manager") }
+        )
+    }
+}
