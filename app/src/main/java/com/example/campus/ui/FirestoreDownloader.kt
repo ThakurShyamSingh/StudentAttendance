@@ -10,21 +10,12 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import kotlin.collections.iterator
 
 object FirestoreDownloader {
 
-    // Instead of a static field, use this helper to get the Firestore instance on demand.
     private fun getFirestore() = Firebase.firestore
 
-    /**
-     * Downloads JSON data from Firestore for both registered faces and crowdsense attendance,
-     * then writes the data to local files.
-     *
-     * @param context The Android Context.
-     * @param onProgress Callback reporting progress (0.0 to 1.0) for registered faces download.
-     * @param onDownloading Callback indicating if a download is in progress.
-     * @param onDownloadComplete Callback called when both downloads are complete.
-     */
     fun downloadJSONFromFirestore(
         context: Context,
         onProgress: (Float) -> Unit,
@@ -34,7 +25,6 @@ object FirestoreDownloader {
         onDownloading(true)
 
         CoroutineScope(Dispatchers.IO).launch {
-
             var completedTasks = 0
 
             downloadRegisteredFaces(context, onProgress) { success ->
@@ -46,6 +36,11 @@ object FirestoreDownloader {
                 if (success) completedTasks++
                 checkCompletion(onDownloading, onDownloadComplete, completedTasks)
             }
+
+            downloadStudentAttendance(context) { success ->
+                if (success) completedTasks++
+                checkCompletion(onDownloading, onDownloadComplete, completedTasks)
+            }
         }
     }
 
@@ -54,7 +49,6 @@ object FirestoreDownloader {
         onProgress: (Float) -> Unit,
         onComplete: (Boolean) -> Unit
     ) {
-        // Download from the "students" collection
         getFirestore().collection("students")
             .get()
             .addOnSuccessListener { snapshot ->
@@ -68,7 +62,6 @@ object FirestoreDownloader {
                     studentData.put("rollNumber", doc.getString("rollNumber"))
                     studentData.put("role", doc.getString("role"))
 
-                    // Convert the embedding list (stored as a List) into a JSONArray.
                     val embeddingList = doc.get("embedding")
                     studentData.put("embedding", JSONArray(embeddingList as? List<*> ?: listOf<Any>()))
 
@@ -77,12 +70,10 @@ object FirestoreDownloader {
                     onProgress(processed.toFloat() / totalStudents)
                 }
 
-                // Wrap the array under "StudentDetails"
                 val jsonObject = JSONObject().apply {
                     put("StudentDetails", studentArray)
                 }
 
-                // Write to registered_faces.json
                 val file = File(context.filesDir, "registered_faces.json")
                 file.writeText(jsonObject.toString(4))
                 Log.d("FirestoreDownloader", "Downloaded registered_faces.json successfully")
@@ -111,7 +102,6 @@ object FirestoreDownloader {
 
                         for ((time, value) in dateDataMap) {
                             if (value is Map<*, *>) {
-                                // Convert nested Map to JSONObject
                                 timeSlotObject.put(time, JSONObject(value as Map<*, *>))
                             } else {
                                 timeSlotObject.put(time, value)
@@ -141,18 +131,64 @@ object FirestoreDownloader {
             }
     }
 
+    private fun downloadStudentAttendance(
+        context: Context,
+        onComplete: (Boolean) -> Unit
+    ) {
+        getFirestore().collection("StudentAttendance")
+            .get()
+            .addOnSuccessListener { snapshot ->
+                try {
+                    val studentAttendance = JSONObject()
+
+                    for (doc in snapshot.documents) {
+                        val dateKey = doc.id
+                        val dataMap = doc.data ?: continue
+
+                        val hourObject = JSONObject()
+
+                        for ((hourKey, value) in dataMap) {
+                            if (value is Map<*, *>) {
+                                val hourData = JSONObject()
+                                for ((rollKey, present) in value) {
+                                    if (rollKey != null && present is Boolean) {
+                                        hourData.put(rollKey.toString(), present)
+                                    }
+                                }
+                                hourObject.put(hourKey, hourData)
+                            }
+                        }
+
+                        studentAttendance.put(dateKey, hourObject)
+                    }
+
+                    val fullJson = JSONObject().apply {
+                        put("StudentAttendance", studentAttendance)
+                    }
+
+                    val file = File(context.filesDir, "attendance.json")
+                    file.writeText(fullJson.toString(4))
+                    Log.d("FirestoreDownloader", "Downloaded attendance.json successfully")
+                    onComplete(true)
+                } catch (e: Exception) {
+                    Log.e("FirestoreDownloader", "Error processing attendance.json", e)
+                    onComplete(false)
+                }
+            }
+            .addOnFailureListener { e ->
+                Log.e("FirestoreDownloader", "Failed to download attendance.json", e)
+                onComplete(false)
+            }
+    }
 
     private fun checkCompletion(
         onDownloading: (Boolean) -> Unit,
         onComplete: (Boolean) -> Unit,
-        completedTasks: Int,
-//        totalTasks: Int
+        completedTasks: Int
     ) {
-        if (completedTasks == 2) {
+        if (completedTasks == 3) {
             onDownloading(false)
             onComplete(true)
-        } else {
-            onComplete(false)
         }
     }
 }

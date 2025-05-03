@@ -217,12 +217,12 @@ fun BottomNavigationBar(navController: NavController) {
             icon = { Icon(Icons.Filled.Visibility, contentDescription = "View Attendance") },
             label = { Text("View") },
             selected = false,
-            onClick = { }
+            onClick = { navController.navigate("display_attendance") }
         )
         NavigationBarItem(
             icon = { Icon(Icons.Filled.Face, contentDescription = "Edit Face Data") },
             label = { Text("Edit Faces") },
-            selected = false,
+            selected = true,
             onClick = { navController.navigate("student_manager") }
         )
     }

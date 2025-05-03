@@ -49,17 +49,7 @@ fun CrowdSenseScreen(
         onResult = { isGranted ->
             if (isGranted) {
                 Toast.makeText(context, "Fetching location...", Toast.LENGTH_SHORT).show()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    try {
-                        locationHelper.getLocation { lat, lng ->
-                            DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
-                            processesStarted = true
-                        }
-                    } catch (e: SecurityException) {
-                        Log.e("CrowdSenseScreen", "Permission granted but failed to get location: ${e.message}")
-                        Toast.makeText(context, "Failed to fetch location due to permission", Toast.LENGTH_SHORT).show()
-                    }
-                }, 500)
+
             } else {
                 Toast.makeText(context, "Location permission denied", Toast.LENGTH_SHORT).show()
             }
@@ -77,17 +67,7 @@ fun CrowdSenseScreen(
                     ) == PackageManager.PERMISSION_GRANTED
 
                     if (hasPermission && !processesStarted) {
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            try {
-                                locationHelper.getLocation { lat, lng ->
-                                    DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
-                                    processesStarted = true
-                                }
-                            } catch (e: SecurityException) {
-                                Log.e("CrowdSenseScreen", "Location error in ON_RESUME: ${e.message}")
-                                Toast.makeText(context, "Unable to get location.", Toast.LENGTH_SHORT).show()
-                            }
-                        }, 500)
+
                     }
                 }
 
@@ -129,6 +109,7 @@ fun CrowdSenseScreen(
                 locationHelper.getLocation { lat, lng ->
                     startProcessesOnce(context, wifiHelper, bluetoothHelper, hour)
                     DataManipulator.saveLatitudeLongitudeToJson(context, lat, lng, hour)
+                    Toast.makeText(context, "uploaded", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: SecurityException) {
                 Log.e("CrowdSenseScreen", "Location permission error: ${e.message}")

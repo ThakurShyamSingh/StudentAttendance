@@ -21,7 +21,8 @@ enum class Routes(val route: String) {
     DISPLAY_DETAILS_SCREEN("DisplayDetailsScreen"),
     STUDENT_MANAGER("student_manager"),
     EDIT_FACE_SCREEN("edit_face_screen"),
-    HOUR_SELECTOR("hour_selector_screen")
+    HOUR_SELECTOR("hour_selector_screen"),
+    DISPLAY_ATTENDANCE("display_attendance")
 
 }
 
@@ -53,6 +54,10 @@ fun AppNavigation() {
                 name = name, rollNumber = rollNumber,
                 navController = navController,hour = hour
             )
+        }
+
+        composable(Routes.DISPLAY_ATTENDANCE.route) {
+            DisplayAttendanceScreen( navController)
         }
 
         composable(

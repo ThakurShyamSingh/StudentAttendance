@@ -88,4 +88,26 @@ class CameraHelper(
             }
         )
     }
+
+    fun captureMultipleImages(
+        imageCount: Int,
+        onImageCaptured: (Bitmap?) -> Unit,
+        onComplete: () -> Unit
+    ) {
+        var capturedCount = 0
+
+        fun captureNext() {
+            captureAndProcessFace { bitmap ->
+                onImageCaptured(bitmap)
+                capturedCount++
+                if (capturedCount < imageCount) {
+                    captureNext()
+                } else {
+                    onComplete()
+                }
+            }
+        }
+
+        captureNext()
+    }
 }

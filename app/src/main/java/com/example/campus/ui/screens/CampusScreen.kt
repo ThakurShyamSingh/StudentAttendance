@@ -170,7 +170,7 @@ fun CampusScreen(navController: NavController) {
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Text("Welcome to Campus App", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Text("FaceLynx Admin", fontSize = 26.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = {
