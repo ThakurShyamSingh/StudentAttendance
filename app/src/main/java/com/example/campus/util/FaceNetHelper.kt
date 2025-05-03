@@ -3,17 +3,13 @@ package com.example.campus.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.Face
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetectorOptions
+import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.io.File
-import java.io.FileWriter
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -21,105 +17,99 @@ class FaceNetHelper(private val context: Context) : AutoCloseable {
 
     private val modelPath = "facenet.tflite"
     private var interpreter: Interpreter? = null
-    private val csvFile = File(context.filesDir, "registered_faces.csv")
+    private val jsonFile = File(context.filesDir, "registered_faces.json")
+    private val faceMatchThreshold = 0.6f
 
     init {
         try {
             val model = FileUtil.loadMappedFile(context, modelPath)
             interpreter = Interpreter(model)
+            Log.d("FaceNetHelper", "FaceNet model loaded successfully")
         } catch (e: Exception) {
             Log.e("FaceNetHelper", "Error loading FaceNet model", e)
             interpreter = null
         }
     }
 
-    fun registerFace(name: String, bitmap: Bitmap, imagePath: String, onResult: (Boolean, String) -> Unit) {
-        detectFace(bitmap) { faceBitmap ->
-            if (faceBitmap == null) {
-                onResult(false, "No face detected")
-                return@detectFace
-            }
-            try {
-                getFaceEmbedding(faceBitmap) { embedding ->
-                    if (embedding == null) {
-                        onResult(false, "Failed to generate embedding")
-                        return@getFaceEmbedding
-                    }
-                    saveEmbeddingToCSV(name, imagePath, embedding)
-                    onResult(true, "Face Successfully Registered")
-                }
-            } catch (e: Exception) {
-                Log.e("FaceNetHelper", "Error processing face", e)
-                onResult(false, "Error processing face")
-            }
-        }
-    }
-
-    private fun detectFace(bitmap: Bitmap, onFaceDetected: (Bitmap?) -> Unit) {
-        val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-            .setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
-            .build()
-
-        val detector = FaceDetection.getClient(options)
-        val image = InputImage.fromBitmap(bitmap, 0)
-
-        detector.process(image)
-            .addOnSuccessListener { faces ->
-                if (faces.isNotEmpty()) {
-                    val face = faces[0]
-                    val faceBitmap = cropFace(bitmap, face)?.let { ensureBitmapFormat(it) }
-                    onFaceDetected(faceBitmap)
-                } else {
-                    onFaceDetected(null)
-                }
-            }
-            .addOnFailureListener {
-                Log.e("FaceNetHelper", "Face detection failed", it)
-                onFaceDetected(null)
-            }
-    }
-
-    private fun getFaceEmbedding(bitmap: Bitmap, onResult: (FloatArray?) -> Unit) {
+    fun generateEmbedding(bitmap: Bitmap): FloatArray? {
         if (interpreter == null) {
             Log.e("FaceNetHelper", "FaceNet model is not loaded")
-            onResult(null)
-            return
+            return null
         }
 
-        try {
+        return try {
             val processedBitmap = preprocessImage(bitmap)
             val inputBuffer = convertBitmapToBuffer(processedBitmap)
             val outputArray = Array(1) { FloatArray(512) }
             interpreter?.run(inputBuffer, outputArray)
-            onResult(outputArray[0])
+            Log.d("FaceNetHelper", "Embedding generated successfully")
+            outputArray[0]
         } catch (e: Exception) {
             Log.e("FaceNetHelper", "Failed to generate embedding", e)
-            onResult(null)
-        }
-    }
-
-    private fun cropFace(bitmap: Bitmap, face: Face): Bitmap? {
-        val bounds = face.boundingBox
-        val x = bounds.left.coerceAtLeast(0)
-        val y = bounds.top.coerceAtLeast(0)
-        val width = bounds.width().coerceAtMost(bitmap.width - x)
-        val height = bounds.height().coerceAtMost(bitmap.height - y)
-
-        return try {
-            Bitmap.createBitmap(bitmap, x, y, width, height)
-        } catch (e: Exception) {
-            Log.e("FaceNetHelper", "Failed to crop face", e)
             null
         }
     }
 
-    private fun ensureBitmapFormat(bitmap: Bitmap): Bitmap {
-        return if (bitmap.config == Bitmap.Config.ARGB_8888) {
-            bitmap
-        } else {
-            bitmap.copy(Bitmap.Config.ARGB_8888, true)
+    fun recognizeFace(embedding: FloatArray): Pair<String, String>? {
+        val registeredFaces = loadRegisteredFaces()
+        var bestMatch: Pair<String, String>? = null
+        var bestDistance = Float.MAX_VALUE
+
+        for (faceData in registeredFaces) {
+            val distance = calculateEuclideanDistance(embedding, faceData.embedding)
+            Log.d("FaceNetHelper", "Comparing with ${faceData.name} (${faceData.rollNumber}), Distance: $distance")
+
+            if (distance < bestDistance && distance < faceMatchThreshold) {
+                bestDistance = distance
+                bestMatch = Pair(faceData.name, faceData.rollNumber)
+            }
         }
+
+        return if (bestMatch != null) {
+            Log.d("FaceNetHelper", "Face match found: ${bestMatch.first} (${bestMatch.second})")
+            bestMatch
+        } else {
+            Log.d("FaceNetHelper", "No matching face found")
+            null
+        }
+    }
+
+    private fun loadRegisteredFaces(): List<FaceData> {
+        val faceList = mutableListOf<FaceData>()
+
+        if (!jsonFile.exists()) return faceList
+
+        return try {
+            val jsonString = jsonFile.readText()
+            val jsonObject = JSONObject(jsonString)
+            val studentArray = jsonObject.getJSONArray("StudentDetails")
+
+            for (i in 0 until studentArray.length()) {
+                val student = studentArray.getJSONObject(i)
+                val name = student.getString("name")
+                val rollNumber = student.getString("rollNumber")
+                val embeddingArray = student.getJSONArray("embedding")
+                val embedding = FloatArray(embeddingArray.length()) { j -> embeddingArray.getDouble(j).toFloat() }
+
+                if (embedding.size == 512) {
+                    faceList.add(FaceData(name, rollNumber, embedding))
+                } else {
+                    Log.e("FaceNetHelper", "Invalid embedding format, skipping: $student")
+                }
+            }
+
+            Log.d("FaceNetHelper", "Loaded ${faceList.size} registered faces from JSON")
+            faceList
+        } catch (e: Exception) {
+            Log.e("FaceNetHelper", "Error reading JSON file", e)
+            faceList
+        }
+    }
+
+    private fun calculateEuclideanDistance(embedding1: FloatArray, embedding2: FloatArray): Float {
+        return embedding1.zip(embedding2)
+            .sumOf { (a, b) -> ((a - b) * (a - b)).toDouble() }
+            .toFloat()
     }
 
     private fun preprocessImage(bitmap: Bitmap): Bitmap {
@@ -128,7 +118,7 @@ class FaceNetHelper(private val context: Context) : AutoCloseable {
             .build()
 
         val tensorImage = TensorImage(org.tensorflow.lite.DataType.FLOAT32)
-        tensorImage.load(ensureBitmapFormat(bitmap))
+        tensorImage.load(bitmap)
         return imageProcessor.process(tensorImage).bitmap
     }
 
@@ -150,22 +140,27 @@ class FaceNetHelper(private val context: Context) : AutoCloseable {
         return inputBuffer
     }
 
-    private fun saveEmbeddingToCSV(name: String, imagePath: String, embedding: FloatArray) {
+    override fun close() {
         try {
-            if (!csvFile.exists()) {
-                csvFile.createNewFile()
-            }
-            val writer = FileWriter(csvFile, true)
-            Log.i("Captured Details ","$name,$imagePath,${embedding.joinToString(",")}\n")
-            writer.append("$name,$imagePath,${embedding.joinToString(",")}\n")
-            writer.flush()
-            writer.close()
+            interpreter?.close()
+            Log.d("FaceNetHelper", "Interpreter closed successfully")
         } catch (e: Exception) {
-            Log.e("FaceNetHelper", "Error saving embedding to CSV", e)
+            Log.e("FaceNetHelper", "Error closing FaceNet Interpreter", e)
         }
     }
+}
 
-    override fun close() {
-        interpreter?.close()
+/**
+ * Data class to store registered face embeddings along with name and roll number.
+ */
+data class FaceData(val name: String, val rollNumber: String, val embedding: FloatArray) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is FaceData) return false
+        return name == other.name && rollNumber == other.rollNumber && embedding.contentEquals(other.embedding)
+    }
+
+    override fun hashCode(): Int {
+        return 31 * (31 * name.hashCode() + rollNumber.hashCode()) + embedding.contentHashCode()
     }
 }
