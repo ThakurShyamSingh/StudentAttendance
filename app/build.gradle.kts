@@ -85,11 +85,6 @@ dependencies {
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
-
-    // TensorFlow Lite
-//    implementation("org.tensorflow:tensorflow-lite:2.9.0") // Core TensorFlow Lite
-    implementation("org.tensorflow:tensorflow-lite-support:0.5.0") // Support Library
-    // implementation("org.tensorflow:tensorflow-lite-task-vision:2.13.0") // Uncomment if needed for vision tasks
     implementation("com.google.mlkit:face-detection:16.1.5")
 
     implementation ("com.google.firebase:firebase-appcheck:17.0.1")
@@ -132,6 +127,7 @@ dependencies {
     implementation (platform("com.google.firebase:firebase-bom:32.7.0"))
 
     implementation("androidx.work:work-runtime-ktx:2.8.1")
+    0
     implementation("com.google.firebase:firebase-firestore-ktx:24.9.1")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.1")
     implementation ("com.google.firebase:firebase-auth-ktx")
